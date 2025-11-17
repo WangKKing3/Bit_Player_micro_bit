@@ -1,0 +1,8 @@
+{
+    "files.associations": {
+        ".als.json": "jsonc",
+        "adc.h": "c",
+        "conn.h": "c",
+        "joystick_ble.h": "c"
+    }
+}
