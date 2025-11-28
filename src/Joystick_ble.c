@@ -1,8 +1,3 @@
-/*
- * Joystick Bluetooth Implementation
- * For micro:bit v2 with Zephyr SDK v2.5.1
- */
-
 #include <zephyr/kernel.h>
 #include <zephyr/sys/printk.h>
 #include <string.h>
