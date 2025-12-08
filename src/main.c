@@ -1,10 +1,4 @@
-/*
- * Joystick Reader with Bluetooth for micro:bit v2
- * Zephyr SDK v2.5.1 - HOLD BUTTON VERSION
- * 
- * Hold knapp A for å sende joystick-data
- * Slipp knapp A for å stoppe sending
- */
+//main.c
 
 #include <zephyr/kernel.h>
 #include <zephyr/device.h>
@@ -21,7 +15,7 @@
 #define RESOLUTION 10 
 #define VREF_MV 3000
 
-/* Knapper for kontroll */
+/* Knapper */
 static const struct gpio_dt_spec button_a = GPIO_DT_SPEC_GET(DT_ALIAS(sw0), gpios);
 static const struct gpio_dt_spec button_b = GPIO_DT_SPEC_GET(DT_ALIAS(sw1), gpios);
 
@@ -29,6 +23,10 @@ static const struct device *adc_dev;
 
 /* Buffer for ADC reading */
 static int16_t sample_buffer[1];
+
+/* Siste gyldige verdier (for feilhåndtering) */
+static int16_t last_valid_x = 512;
+static int16_t last_valid_y = 512;
 
 /* ADC channel configuration */
 static struct adc_channel_cfg channel_cfg_y = {
@@ -53,8 +51,12 @@ static struct adc_channel_cfg channel_cfg_x = {
 #endif
 };
 
-/* Les ADC-kanal og returner verdi i mV */
-static int read_channel_mv(const struct adc_channel_cfg *cfg, int channel_id)
+/* Status variabler */
+static bool ble_advertising = false;
+static struct gpio_callback button_cb_data;
+
+/* Les ADC-kanal og returner råverdi (0-1023) */
+static int read_channel_raw(int channel_id, int16_t *result)
 {
 	int ret;
 
@@ -72,71 +74,83 @@ static int read_channel_mv(const struct adc_channel_cfg *cfg, int channel_id)
 		return ret;
 	}
 
-	return (sample_buffer[0] * VREF_MV) / (1 << RESOLUTION); 
+	/* Clamp til gyldig område (0-1023) */
+	int16_t val = sample_buffer[0];
+	if (val < 0) val = 0;
+	if (val > 1023) val = 1023;
+	
+	*result = val;
+	return 0;
 }
 
-/* Konfigurer knapper (kun som input, ingen interrupts) */
+/* Button interrupt handler */
+static void button_pressed(const struct device *dev, struct gpio_callback *cb, uint32_t pins)
+{
+	if (pins & BIT(button_a.pin)) {
+		printk("Button A pressed\n");
+		if (!ble_advertising) {
+			printk("Starting Bluetooth advertising...\n");
+			ble_connect();
+			ble_advertising = true;
+		}
+	} else if (pins & BIT(button_b.pin)) {
+		printk("Button B pressed\n");
+		if (ble_advertising) {
+			printk("Stopping Bluetooth...\n");
+			ble_cancel_connect();
+			ble_advertising = false;
+		}
+	}
+}
+
+/* Konfigurer knapper */
 static int configure_buttons(void)
 {
 	int ret;
 
-	printk("Configuring buttons...\n");
-
 	if (!device_is_ready(button_a.port)) {
-		printk("ERROR: Button A device not ready\n");
+		printk("ERROR: Button device not ready\n");
 		return -1;
 	}
 
-	if (!device_is_ready(button_b.port)) {
-		printk("ERROR: Button B device not ready\n");
-		return -1;
-	}
-
-	/* Configure button A with pull-up (active low) */
 	ret = gpio_pin_configure_dt(&button_a, GPIO_INPUT | GPIO_PULL_UP);
-	if (ret < 0) {
-		printk("ERROR: Failed to configure button A GPIO (err %d)\n", ret);
-		return ret;
-	}
+	if (ret < 0) return ret;
 
-	/* Configure button B with pull-up (active low) */
 	ret = gpio_pin_configure_dt(&button_b, GPIO_INPUT | GPIO_PULL_UP);
-	if (ret < 0) {
-		printk("ERROR: Failed to configure button B GPIO (err %d)\n", ret);
-		return ret;
-	}
+	if (ret < 0) return ret;
 
-	printk("Buttons configured successfully!\n");
-	printk("  - Hold Button A to enable joystick control\n");
-	printk("  - Release Button A to disable joystick control\n");
+	ret = gpio_pin_interrupt_configure_dt(&button_a, GPIO_INT_EDGE_FALLING);
+	if (ret < 0) return ret;
+
+	ret = gpio_pin_interrupt_configure_dt(&button_b, GPIO_INT_EDGE_FALLING);
+	if (ret < 0) return ret;
+
+	gpio_init_callback(&button_cb_data, button_pressed,
+	                   BIT(button_a.pin) | BIT(button_b.pin));
+	
+	ret = gpio_add_callback(button_a.port, &button_cb_data);
+	if (ret < 0) return ret;
+
+	printk("Buttons configured\n");
 	return 0;
-}
-
-/* Sjekk om knapp A er holdt inne */
-static bool is_button_a_pressed(void)
-{
-	return gpio_pin_get_dt(&button_a) != 0;
 }
 
 int main(void)
 {
 	int ret;
 	int count = 0;
-	int mv_y, mv_x;
 	int16_t raw_y, raw_x;
-	bool button_a_held;
-	bool prev_button_state = false;
+	uint8_t buttons;
 
-	printk("\n\n===========================================\n");
-	printk("Joystick Reader with Bluetooth\n");
-	printk("micro:bit v2 - Zephyr SDK v2.5.1\n");
-	printk("HOLD BUTTON VERSION\n");
+	printk("\n===========================================\n");
+	printk("Joystick BLE Sender\n");
+	printk("Hold A on receiver to control car\n");
 	printk("===========================================\n\n");
 
 	/* Konfigurer knapper */
 	ret = configure_buttons();
 	if (ret < 0) {
-		printk("WARNING: Button configuration failed (continuing anyway)\n");
+		printk("WARNING: Button config failed\n");
 	}
 
 	/* Initialiser Bluetooth */
@@ -149,72 +163,69 @@ int main(void)
 		return -1;
 	}
 
-	printk("ADC device is ready\n");
-
 	/* Configure ADC channels */
 	ret = adc_channel_setup(adc_dev, &channel_cfg_y);
 	if (ret < 0) {
-		printk("ERROR: ADC Y channel setup failed (%d)\n", ret);
+		printk("ERROR: ADC Y channel setup failed\n");
 		return -1;
 	}
 
 	ret = adc_channel_setup(adc_dev, &channel_cfg_x);
 	if (ret < 0) {
-		printk("ERROR: ADC X channel setup failed (%d)\n", ret);
+		printk("ERROR: ADC X channel setup failed\n");
 		return -1;
 	}
 
-	printk("ADC channels configured\n");
+	printk("ADC ready\n");
 
-	/* AUTO-START BLUETOOTH ADVERTISING */
-	printk("\n*** AUTO-STARTING BLUETOOTH ADVERTISING ***\n");
-	printk("Hold Button A to send joystick data\n");
-	printk("Release Button A to stop sending\n\n");
-	
+	/* Auto-start advertising */
+	printk("Auto-starting Bluetooth...\n");
 	ble_connect();
-
-	printk("Starting joystick readings...\n\n");
+	ble_advertising = true;
 
 	/* Main loop */
 	while (1) {
-		/* Sjekk om knapp A er holdt inne */
-		button_a_held = is_button_a_pressed();
-
-		/* Print statusendring */
-		if (button_a_held != prev_button_state) {
-			if (button_a_held) {
-				printk("\n>>> Button A HELD - Joystick control ENABLED <<<\n");
-			} else {
-				printk("\n>>> Button A RELEASED - Joystick control DISABLED <<<\n");
-			}
-			prev_button_state = button_a_held;
+		/* Les knapp A (aktiv lav) */
+		buttons = 0;
+		if (gpio_pin_get_dt(&button_a) == 0) {
+			buttons |= BTN_A_MASK;
+		}
+		if (gpio_pin_get_dt(&button_b) == 0) {
+			buttons |= BTN_B_MASK;
 		}
 
-		/* Les Y-akse (P2) */
-		mv_y = read_channel_mv(&channel_cfg_y, channel_cfg_y.channel_id);
-		raw_y = sample_buffer[0];
-
-		/* Les X-akse (P1) */
-		mv_x = read_channel_mv(&channel_cfg_x, channel_cfg_x.channel_id);
-		raw_x = sample_buffer[0];
-
-		if (mv_y < 0 || mv_x < 0) {
-			printk("ADC read failed!\r\n");
+		/* Les Y-akse */
+		ret = read_channel_raw(channel_cfg_y.channel_id, &raw_y);
+		if (ret < 0) {
+			raw_y = last_valid_y;  /* Bruk siste gyldige */
 		} else {
-			/* Print til konsoll */
-			printk("[%04d] Y(P2): Raw=%4d/%4dmV | X(P1): Raw=%4d/%4dmV", 
-			       count++, raw_y, mv_y, raw_x, mv_x);
-
-			/* Send via Bluetooth KUN hvis knapp A holdes inne OG tilkoblet */
-			if (ble_is_ready() && button_a_held) {
-				ble_send_joystick_data(raw_x, raw_y);
-				printk(" [BLE SENT]");
-			}
-			
-			printk("\r\n");
+			last_valid_y = raw_y;
 		}
 
-		k_msleep(100);
+		/* Les X-akse */
+		ret = read_channel_raw(channel_cfg_x.channel_id, &raw_x);
+		if (ret < 0) {
+			raw_x = last_valid_x;  /* Bruk siste gyldige */
+		} else {
+			last_valid_x = raw_x;
+		}
+
+		/* Print til konsoll */
+		printk("[%04d] X:%4d Y:%4d", count++, raw_x, raw_y);
+		
+		if (buttons & BTN_A_MASK) {
+			printk(" [A]");
+		}
+
+		/* Send via Bluetooth */
+		if (ble_is_ready()) {
+			ble_send_joystick_data(raw_x, raw_y, buttons);
+			printk(" [BLE]");
+		}
+		
+		printk("\n");
+
+		k_msleep(50);  /* 20 Hz oppdatering */
 	}
 
 	return 0;

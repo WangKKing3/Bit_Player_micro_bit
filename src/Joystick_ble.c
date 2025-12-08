@@ -1,3 +1,5 @@
+//Joystick_ble.c
+
 #include <zephyr/kernel.h>
 #include <zephyr/sys/printk.h>
 #include <string.h>
@@ -10,7 +12,7 @@
 
 #include "joystick_ble.h"
 
-/* Custom UUID for joystick service */
+/* Custom UUID for joystick service - må matche receiver */
 #define JOYSTICK_SVC_UUID \
 	BT_UUID_128_ENCODE(0x12345678, 0x1234, 0x5678, 0x1234, 0x56789abcdef0)
 
@@ -36,23 +38,24 @@ static const struct bt_gatt_attr *local_attr;
 static bool remote_ready;
 static bool is_connected;
 
-/* Joystick data structure */
+/* Joystick data structure - MÅ MATCHE RECEIVER */
 struct joystick_data {
 	int16_t x_pos;
 	int16_t y_pos;
+	uint8_t buttons;
 } __packed;
 
 /* Send joystick data via Bluetooth */
-void ble_send_joystick_data(int16_t x_pos, int16_t y_pos)
+void ble_send_joystick_data(int16_t x_pos, int16_t y_pos, uint8_t buttons)
 {
 	struct joystick_data data = {
 		.x_pos = x_pos,
 		.y_pos = y_pos,
+		.buttons = buttons,
 	};
 	int err;
 
 	if (!default_conn || !remote_ready) {
-		/* Ikke klar til å sende ennå */
 		return;
 	}
 
@@ -105,7 +108,7 @@ static void connected(struct bt_conn *conn, uint8_t err)
 	}
 
 	is_connected = true;
-	remote_ready = false;  /* Venter på at remote aktiverer notifikasjoner */
+	remote_ready = false;
 }
 
 /* Disconnection callback */
@@ -154,10 +157,8 @@ void ble_cancel_connect(void)
 	int err;
 
 	if (is_connected) {
-		/* Disconnect if connected */
 		bt_conn_disconnect(default_conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
 	} else {
-		/* Stop advertising */
 		err = bt_le_adv_stop();
 		if (err) {
 			printk("Failed to stop advertising (err %d)\n", err);
@@ -182,10 +183,8 @@ void ble_init(void)
 
 	printk("Bluetooth initialized\n");
 
-	/* Register connection callbacks */
 	bt_conn_cb_register(&conn_callbacks);
 
-	/* Store reference to local GATT characteristic */
 	local_attr = &joystick_svc.attrs[1];
 
 	printk("Joystick BLE service ready\n");
