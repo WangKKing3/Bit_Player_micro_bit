@@ -5,5 +5,6 @@ project(Bit_Player_micro_bit)
 
 target_sources(app PRIVATE 
     src/main.c
-    src/Joystick_ble.c
+    src/joystick_state.c
+    src/sender_ble.c
 )
