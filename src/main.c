@@ -109,7 +109,7 @@ int main(void)
         if (read_adc(cfg_x.channel_id, &x) < 0) x = last_x;
         else last_x = x;
 
-        bool btn = (gpio_pin_get_dt(&btn_a) == 0);
+        bool btn = (gpio_pin_get_dt(&btn_a) != 0);
 
         /* Convert to direction */
         bool changed = joystick_to_direction(x, y, btn, &dir, &speed);

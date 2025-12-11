@@ -4,5 +4,6 @@
         "adc.h": "c",
         "conn.h": "c",
         "joystick_ble.h": "c"
-    }
+    },
+    "sarif-viewer.connectToGithubCodeScanning": "off"
 }
