@@ -68,6 +68,7 @@ static const char *dir_name(Motor_direction d)
         case Right: return "RIGHT";
         case Left: return "LEFT";
         case Stop: return "STOP";
+        case Idle: return "IDLE";
         default: return "?";
     }
 }

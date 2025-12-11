@@ -16,7 +16,7 @@ bool joystick_to_direction(int16_t x_pos, int16_t y_pos, bool btn_a, Motor_direc
 	int8_t new_speed = 0;
 
 	if (!btn_a){
-		new_dir = Stop;
+		new_dir = Idle;
 		new_speed = 0;
 		goto done;
 	}
