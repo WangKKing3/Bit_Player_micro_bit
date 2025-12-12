@@ -76,7 +76,7 @@ static const char *dir_name(Motor_direction d)
 int main(void)
 {
     int16_t y, x;
-    Motor_direction dir;
+    Motor_direction dir; // Current direction
     uint8_t speed;
 
     printk("\n=== Joystick Sender (DEBUG) ===\n");
@@ -111,9 +111,10 @@ int main(void)
         else last_x = x;
 
         bool btn = (gpio_pin_get_dt(&btn_a) != 0);
+        bool btn_b_state = (gpio_pin_get_dt(&btn_b) != 0);
 
         /* Convert to direction */
-        bool changed = joystick_to_direction(x, y, btn, &dir, &speed);
+        bool changed = joystick_to_direction(x, y, btn, btn_b_state, &dir, &speed);
 
         /* DEBUG: Always print raw values */
         printk("X:%4d Y:%4d btn:%d -> %-5s %3d%%", x, y, btn ? 1 : 0, dir_name(dir), speed);

@@ -10,7 +10,7 @@ void joystick_state_init(void) {
 	current_dir = Stop;
 }
 
-bool joystick_to_direction(int16_t x_pos, int16_t y_pos, bool btn_a, Motor_direction *dir, uint8_t *speed) {
+bool joystick_to_direction(int16_t x_pos, int16_t y_pos, bool btn_a, bool btn_b, Motor_direction *dir, uint8_t *speed) {
 
 	Motor_direction new_dir = Stop;
 	int8_t new_speed = 0;
@@ -37,6 +37,7 @@ bool joystick_to_direction(int16_t x_pos, int16_t y_pos, bool btn_a, Motor_direc
 		turn = -((JOY_CENTER - x_pos) * 100) / (JOY_CENTER);
 	}
 	
+	// Determine direction and speed
 	if (fwd == 0 && turn == 0) {
 		new_dir = Stop;
 		new_speed = 0;
@@ -49,10 +50,23 @@ bool joystick_to_direction(int16_t x_pos, int16_t y_pos, bool btn_a, Motor_direc
 	new_speed = (abs_fwd > abs_turn) ? abs_fwd : abs_turn;
 	if (new_speed > 100) new_speed = 100;
 
-	if (abs_fwd < 25 && abs_turn > 10) {
-		new_dir = (turn > 0) ? Rotate_Right : Rotate_Left;
+	if(abs_fwd < 25 && abs_turn > 10){
+		if (btn_b) {
+			// Knapp B: Strafe (sideveis)
+			new_dir = (turn > 0) ? Right : Left;
+		} else {
+			// Normal: Roter på stedet
+			new_dir = (turn > 0) ? Rotate_Right : Rotate_Left;
+		}
 		goto done;
-	} 
+	}
+
+	// if (abs_fwd < 25 && abs_turn > 10) {
+	// 	new_dir = (turn > 0) ? Rotate_Right : Rotate_Left;
+	// 	goto done;
+	// } 
+
+
 
 	if (fwd > 0) {
 		if (abs_turn > 50)
