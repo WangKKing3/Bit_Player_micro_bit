@@ -1,3 +1,9 @@
+/*
+* Acknowledgement:
+* This file includes example code derrived from https://github.com/OskeLTU
+* Driving_car motor_controls.h
+*/
+
 #ifndef MOTOR_TYPES_H
 #define MOTOR_TYPES_H
 #include <stdint.h>

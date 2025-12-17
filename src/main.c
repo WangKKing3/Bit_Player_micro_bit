@@ -21,9 +21,10 @@ static const struct gpio_dt_spec btn_b = GPIO_DT_SPEC_GET(DT_ALIAS(sw1), gpios);
 
 static const struct device *adc_dev;
 static int16_t adc_buffer[1];
-static int16_t last_x = 512, last_y = 512;
-static int64_t last_send = 0;
+static int16_t last_x = 512, last_y = 512; 
+static int64_t last_send = 0; 
 
+// Configuration for Y axis
 static struct adc_channel_cfg cfg_y = {
     .gain = ADC_GAIN_1_5,
     .reference = ADC_REF_INTERNAL,
@@ -34,8 +35,9 @@ static struct adc_channel_cfg cfg_y = {
 #endif
 };
 
+// Configuration for X axis
 static struct adc_channel_cfg cfg_x = {
-    .gain = ADC_GAIN_1_5,
+    .gain = ADC_GAIN_1_5,                   //3,0 V
     .reference = ADC_REF_INTERNAL,
     .acquisition_time = ADC_ACQ_TIME_DEFAULT,
     .channel_id = 1,
@@ -44,20 +46,23 @@ static struct adc_channel_cfg cfg_x = {
 #endif
 };
 
+// Read ADC value from specified channel
 static int read_adc(int ch, int16_t *val)
 {
     struct adc_sequence seq = {
-        .buffer = adc_buffer,
-        .buffer_size = sizeof(adc_buffer),
-        .resolution = RESOLUTION,
-        .channels = BIT(ch),
+        .buffer = adc_buffer,               // Buffer to store ADC value    
+        .buffer_size = sizeof(adc_buffer),  // Buffer size in bytes
+        .resolution = RESOLUTION,           // 10-bit resolution
+        .channels = BIT(ch),                
     };
+    // Perform the ADC read
     int ret = adc_read(adc_dev, &seq);
     if (ret < 0) return ret;
     *val = (adc_buffer[0] < 0) ? 0 : (adc_buffer[0] > 1023) ? 1023 : adc_buffer[0];
     return 0;
 }
 
+// Helper to get string name of direction
 static const char *dir_name(Motor_direction d)
 {
     switch (d) {
@@ -83,8 +88,8 @@ int main(void)
     printk("Sends Motor_direction directly\n\n");
 
     if (device_is_ready(btn_a.port)) {
-        gpio_pin_configure_dt(&btn_a, GPIO_INPUT | GPIO_PULL_UP);
-        gpio_pin_configure_dt(&btn_b, GPIO_INPUT | GPIO_PULL_UP);
+        gpio_pin_configure_dt(&btn_a, GPIO_INPUT | GPIO_PULL_UP); // Configure button A
+        gpio_pin_configure_dt(&btn_b, GPIO_INPUT | GPIO_PULL_UP); // Configure button B
     }
 
     adc_dev = DEVICE_DT_GET(ADC_NODE);
@@ -95,15 +100,14 @@ int main(void)
     adc_channel_setup(adc_dev, &cfg_y);
     adc_channel_setup(adc_dev, &cfg_x);
 
-    joystick_state_init();
-
-    ble_init();
-    ble_connect();
+    joystick_state_init();  // Initialize joystick state
+    ble_init();             // Initialize BLE   
+    ble_connect();          // Wait until BLE is ready
 
     printk("Hold A to drive\n\n");
 
     while (1) {
-        /* Read joystick */
+        // Read joystick
         if (read_adc(cfg_y.channel_id, &y) < 0) y = last_y;
         else last_y = y;
 
@@ -113,13 +117,13 @@ int main(void)
         bool btn = (gpio_pin_get_dt(&btn_a) != 0);
         bool btn_b_state = (gpio_pin_get_dt(&btn_b) != 0);
 
-        /* Convert to direction */
+        // Convert to direction
         bool changed = joystick_to_direction(x, y, btn, btn_b_state, &dir, &speed);
 
-        /* DEBUG: Always print raw values */
+        // DEBUG: Always print raw values 
         printk("X:%4d Y:%4d btn:%d -> %-5s %3d%%", x, y, btn ? 1 : 0, dir_name(dir), speed);
 
-        /* Send if changed or interval passed */
+        // Send if changed or interval passed 
         int64_t now = k_uptime_get();
         if (ble_is_ready() && (changed || (now - last_send) >= SEND_INTERVAL_MS)) {
             ble_send_direction(dir, speed);
@@ -128,7 +132,7 @@ int main(void)
         }
         printk("\n");
 
-        k_msleep(POLL_INTERVAL_MS);
+        k_msleep(POLL_INTERVAL_MS); // Polling interval
     }
     return 0;
 }
