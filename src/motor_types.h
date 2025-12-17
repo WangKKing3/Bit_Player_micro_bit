@@ -20,6 +20,6 @@ typedef enum {
 
 struct drive_packet {
     uint8_t direction;  // Motor_direction
-    uint8_t speed;      // Speed value (0-255)
+    uint8_t speed;      // Speed value 0-100%
 } __packed;
  #endif // MOTOR_TYPES_H

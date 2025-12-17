@@ -1,3 +1,8 @@
+/*
+* Acknowledgement:
+* This file includes example code derrived from the Zephyr Project 
+* Pong sample
+*/
 #include <zephyr/kernel.h>
 #include <zephyr/sys/printk.h>
 #include <zephyr/bluetooth/bluetooth.h>
@@ -8,24 +13,28 @@
 #include "sender_ble.h"
 #include "motor_types.h"
 
-
+// UUIDs for the Drive Service and Characteristic
 #define DRIVE_SVC_UUID \
     BT_UUID_128_ENCODE(0x12345678, 0x1234, 0x5678, 0x1234, 0x56789abcdef0)
+
+// Characteristic UUID
 #define DRIVE_CHR_UUID \
     BT_UUID_128_ENCODE(0x12345678, 0x1234, 0x5678, 0x1234, 0x56789abcdef1)
 
-static struct bt_uuid_128 svc_uuid = BT_UUID_INIT_128(DRIVE_SVC_UUID);
-static struct bt_uuid_128 chr_uuid = BT_UUID_INIT_128(DRIVE_CHR_UUID);
+static struct bt_uuid_128 svc_uuid = BT_UUID_INIT_128(DRIVE_SVC_UUID); // Service UUID
+static struct bt_uuid_128 chr_uuid = BT_UUID_INIT_128(DRIVE_CHR_UUID); // Characteristic UUID
 
+// Advertising data
 static const struct bt_data ad[] = {
     BT_DATA_BYTES(BT_DATA_FLAGS, (BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR)),
     BT_DATA_BYTES(BT_DATA_UUID128_ALL, DRIVE_SVC_UUID),
 };
 
-static struct bt_conn *conn;
-static const struct bt_gatt_attr *notify_attr;
-static bool subscribed;
-static bool connected;
+// Connection state
+static struct bt_conn *conn;                    // Current connection
+static const struct bt_gatt_attr *notify_attr;  // Notify characteristic attribute
+static bool subscribed;                         // Is client subscribed to notifications
+static bool connected;                          // Is device connected
 
 // GATT characteristic write callback
 void ble_send_direction(Motor_direction dir, uint8_t speed) {
@@ -53,6 +62,7 @@ static void ccc_changed(const struct bt_gatt_attr *attr, uint16_t val)
     printk("Subscribed: %s\n", subscribed ? "yes" : "no");
 }
 
+// GATT service definition
 BT_GATT_SERVICE_DEFINE(drive_svc,
     BT_GATT_PRIMARY_SERVICE(&svc_uuid.uuid),
     BT_GATT_CHARACTERISTIC(&chr_uuid.uuid,
@@ -62,6 +72,7 @@ BT_GATT_SERVICE_DEFINE(drive_svc,
     BT_GATT_CCC(ccc_changed, BT_GATT_PERM_READ | BT_GATT_PERM_WRITE),
 );
 
+// Reconnection work item
 static void reconnect_work_fn(struct k_work *work);
 K_WORK_DELAYABLE_DEFINE(reconnect_work, reconnect_work_fn);
 
@@ -75,6 +86,7 @@ static void reconnect_work_fn(struct k_work *work)
     }
 }
 
+// Connection callbacks
 static void on_connected(struct bt_conn *c, uint8_t err)
 {
     if (err) {
@@ -89,6 +101,7 @@ static void on_connected(struct bt_conn *c, uint8_t err)
 }
 
 
+// Disconnection callback
 static void on_disconnected(struct bt_conn *c, uint8_t reason)
 {
     printk("Disconnected: 0x%02x\n", reason);
@@ -101,6 +114,7 @@ static void on_disconnected(struct bt_conn *c, uint8_t reason)
     k_work_schedule(&reconnect_work, K_MSEC(100));
 }
 
+/* Connection callbacks */
 static struct bt_conn_cb conn_cb = {
     .connected = on_connected,
     .disconnected = on_disconnected,

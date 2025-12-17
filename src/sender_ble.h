@@ -1,3 +1,8 @@
+/*
+* Acknowledgement:
+* This file includes example code derrived from the Zephyr Project 
+* Pong sample
+*/
 #ifndef SENDER_BLE_H
 #define SENDER_BLE_H
 
