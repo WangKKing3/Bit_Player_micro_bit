@@ -10,9 +10,10 @@ void joystick_state_init(void) {
 	current_dir = Stop;
 }
 
+// Convert joystick position and button states to motor direction and speed
 bool joystick_to_direction(int16_t x_pos, int16_t y_pos, bool btn_a, bool btn_b, Motor_direction *dir, uint8_t *speed) {
 
-	Motor_direction new_dir = Stop;
+	Motor_direction new_dir = Stop; 
 	int8_t new_speed = 0;
 
 	if (!btn_a){
@@ -44,6 +45,7 @@ bool joystick_to_direction(int16_t x_pos, int16_t y_pos, bool btn_a, bool btn_b,
 		goto done;
 	}
 
+	// Determine speed based on the larger of forward or turning component
     int32_t abs_fwd = (fwd >= 0) ? fwd : -fwd;
     int32_t abs_turn = (turn >= 0) ? turn : -turn;
 
@@ -61,13 +63,7 @@ bool joystick_to_direction(int16_t x_pos, int16_t y_pos, bool btn_a, bool btn_b,
 		goto done;
 	}
 
-	// if (abs_fwd < 25 && abs_turn > 10) {
-	// 	new_dir = (turn > 0) ? Rotate_Right : Rotate_Left;
-	// 	goto done;
-	// } 
-
-
-
+	// Forward/backward with possible slight turn
 	if (fwd > 0) {
 		if (abs_turn > 50)
 			new_dir = (turn > 0) ? Right : Left;
